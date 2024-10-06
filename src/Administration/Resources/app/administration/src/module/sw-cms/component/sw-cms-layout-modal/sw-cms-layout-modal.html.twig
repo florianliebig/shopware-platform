@@ -16,6 +16,7 @@
         <sw-simple-search-field
             v-model:value="term"
             class="sw-cms-layout-modal__header-search"
+            v-model="term"
             :placeholder="$tc('sw-cms.general.placeholderSearchBar')"
             @search-term-change="onSearch"
         />
