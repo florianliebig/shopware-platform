@@ -8,6 +8,7 @@ use Shopware\Core\Content\Product\ProductDefinition;
 use Shopware\Core\Content\Product\SalesChannel\ProductAvailableFilter;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Filter\MultiFilter;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\RequestCriteriaBuilder;
 use Shopware\Core\Framework\Log\Package;
 use Shopware\Core\Framework\Util\Random;
@@ -63,15 +64,51 @@ class AdminProductStreamController extends AbstractController
         $criteria->addAssociation('manufacturer');
         $criteria->addAssociation('options.group');
 
-        $availableFilter = new ProductAvailableFilter($salesChannelId, ProductVisibilityDefinition::VISIBILITY_ALL);
-        $queries = $availableFilter->getQueries();
-        // remove query for active field as we also want to preview inactive products
-        array_pop($queries);
-        $availableFilter->assign(['queries' => $queries]);
-        $criteria->addFilter($availableFilter);
+        // Only add availability filter if there are no existing visibility filters
+        if (!$this->hasVisibilityFilter($criteria)) {
+            $availableFilter = new ProductAvailableFilter($salesChannelId, ProductVisibilityDefinition::VISIBILITY_ALL);
+            $queries = $availableFilter->getQueries();
+            // remove query for active field as we also want to preview inactive products
+            array_pop($queries);
+            $availableFilter->assign(['queries' => $queries]);
+            $criteria->addFilter($availableFilter);
+        }
 
         $previewResult = $this->salesChannelProductRepository->search($criteria, $salesChannelContext);
 
         return new JsonResponse($previewResult);
+    }
+
+    private function hasVisibilityFilter(Criteria $criteria): bool
+    {
+        foreach ($criteria->getFilters() as $filter) {
+            if ($filter instanceof ProductAvailableFilter) {
+                return true;
+            }
+            // Check for visibility filters in nested MultiFilters to prevent conflicts
+            if ($filter instanceof MultiFilter) {
+                foreach ($filter->getQueries() as $query) {
+                    if ($this->hasVisibilityFilterInQuery($query)) {
+                        return true;
+                    }
+                }
+            }
+            // Check for direct visibility filters
+            if ($this->hasVisibilityFilterInQuery($filter)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasVisibilityFilterInQuery($filter): bool
+    {
+        if (!is_object($filter) || !method_exists($filter, 'getField')) {
+            return false;
+        }
+
+        $field = $filter->getField();
+        return str_contains($field, 'product.visibilities') || str_contains($field, 'visibilities');
     }
 }

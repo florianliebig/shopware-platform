@@ -114,8 +114,30 @@ class SalesChannelProductDefinition extends ProductDefinition implements SalesCh
             if ($filter instanceof ProductAvailableFilter) {
                 return true;
             }
+            // Check for visibility filters in nested MultiFilters to prevent conflicts
+            if ($filter instanceof MultiFilter) {
+                foreach ($filter->getQueries() as $query) {
+                    if ($this->hasVisibilityFilter($query)) {
+                        return true;
+                    }
+                }
+            }
+            // Check for direct visibility filters
+            if ($this->hasVisibilityFilter($filter)) {
+                return true;
+            }
         }
 
         return false;
+    }
+
+    private function hasVisibilityFilter($filter): bool
+    {
+        if (!is_object($filter) || !method_exists($filter, 'getField')) {
+            return false;
+        }
+
+        $field = $filter->getField();
+        return str_contains($field, 'product.visibilities') || str_contains($field, 'visibilities');
     }
 }

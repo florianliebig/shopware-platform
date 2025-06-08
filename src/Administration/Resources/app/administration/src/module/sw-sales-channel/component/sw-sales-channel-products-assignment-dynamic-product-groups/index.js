@@ -12,7 +12,10 @@ const { Criteria } = Shopware.Data;
 export default {
     template,
 
-    inject: ['repositoryFactory'],
+    inject: [
+        'repositoryFactory',
+        'productStreamPreviewService',
+    ],
 
     emits: [
         'selection-change',
@@ -55,20 +58,6 @@ export default {
 
         productStreamRepository() {
             return this.repositoryFactory.create('product_stream');
-        },
-
-        productCriteria() {
-            const criteria = new Criteria(1, 500);
-
-            criteria.filters = this.productStreamFilter;
-            criteria.addAssociation('visibilities.salesChannel');
-            criteria.addFilter(
-                Criteria.not('AND', [
-                    Criteria.equals('product.visibilities.salesChannelId', this.salesChannel.id),
-                ]),
-            );
-
-            return criteria;
         },
 
         productStreamCriteria() {
@@ -194,9 +183,25 @@ export default {
         },
 
         getProducts() {
-            return this.productRepository.search(this.productCriteria).then((products) => {
-                return products;
-            });
+            const criteria = new Criteria(1, 500);
+            criteria.filters = this.productStreamFilter;
+            criteria.addAssociation('visibilities.salesChannel');
+            criteria.addAssociation('manufacturer');
+            criteria.addAssociation('options.group');
+            criteria.addFilter(
+                Criteria.not('AND', [
+                    Criteria.equals('product.visibilities.salesChannelId', this.salesChannel.id),
+                ]),
+            );
+
+            return this.productStreamPreviewService
+                .preview(this.salesChannel.id, criteria, [], {
+                    'sw-currency-id': this.salesChannel.currencyId,
+                    'sw-inheritance': true,
+                })
+                .then((result) => {
+                    return Object.values(result.elements);
+                });
         },
     },
 };
